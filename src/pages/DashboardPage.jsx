@@ -15,104 +15,100 @@ import Topbar from '../components/layout/Topbar';
 import { useAuth } from '../hooks/useAuth';
 import { useHousehold } from '../hooks/useHousehold';
 import { dashboardService } from '../services/dashboardService';
+import { getApiErrorMessage } from '../services/api';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 
 export default function DashboardPage() {
   const { toggleMobileMenu } = useOutletContext() || {};
   const { currentUser } = useAuth();
-  const { currentHousehold } = useHousehold();
+  const { currentHousehold, loading: householdLoading, error: householdError } = useHousehold();
 
   const [dashboardData, setDashboardData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [dashboardError, setDashboardError] = useState('');
 
   useEffect(() => {
+    let active = true;
     async function loadData() {
-      if (!currentHousehold) {
+      if (householdLoading) {
+        setLoading(true);
+        return;
+      }
+      if (!currentHousehold?.id) {
+        setDashboardData(null);
         setLoading(false);
         return;
       }
       try {
         setLoading(true);
+        setDashboardError('');
         const data = await dashboardService.getDashboard(currentHousehold.id);
-        setDashboardData(data);
+        if (active) setDashboardData(data);
       } catch (err) {
-        console.error('Failed to load dashboard:', err);
+        if (active) {
+          setDashboardData(null);
+          setDashboardError(getApiErrorMessage(err, 'Unable to load the household dashboard.'));
+        }
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     }
     loadData();
-  }, [currentHousehold]);
+    return () => { active = false; };
+  }, [currentHousehold?.id, householdLoading]);
 
-  const displayName = currentUser?.displayName || 'Alex';
+  const displayName = currentUser?.displayName || 'there';
 
-  // Fallback defaults matching UI preview if database is fresh
   const stats = [
     {
       label: 'Household Members',
-      value: dashboardData?.householdMembers ?? 4,
+      value: dashboardData?.householdMembers ?? 0,
       icon: Users,
       colorClass: 'mint',
     },
     {
       label: 'Total Chores',
-      value: dashboardData?.totalChores ?? 12,
+      value: dashboardData?.totalChores ?? 0,
       icon: CheckSquare,
       colorClass: 'blue',
     },
     {
       label: 'Pending Chores',
-      value: dashboardData?.pendingChores ?? 5,
+      value: dashboardData?.pendingChores ?? 0,
       icon: Clock,
       colorClass: 'cream',
     },
     {
       label: 'Completed Chores',
-      value: dashboardData?.completedChores ?? 7,
+      value: dashboardData?.completedChores ?? 0,
       icon: CheckCircle2,
       colorClass: 'mint',
     },
     {
       label: 'Overdue Chores',
-      value: dashboardData?.overdueChores ?? 2,
+      value: dashboardData?.overdueChores ?? 0,
       icon: AlertCircle,
       colorClass: 'pink',
     },
     {
       label: 'Total Expenses',
-      value: dashboardData?.totalExpenses ? `$${Number(dashboardData.totalExpenses).toFixed(2)}` : '$245.50',
+      value: `$${Number(dashboardData?.totalExpenses || 0).toFixed(2)}`,
       icon: Wallet,
       colorClass: 'lavender',
     },
     {
       label: 'Your Balance',
-      value: dashboardData?.userBalance !== undefined
-        ? (Number(dashboardData.userBalance) < 0
-          ? `-$${Math.abs(Number(dashboardData.userBalance)).toFixed(2)}`
-          : `+$${Number(dashboardData.userBalance).toFixed(2)}`)
-        : '-$12.30',
+      value: Number(dashboardData?.userBalance || 0) < 0
+        ? `-$${Math.abs(Number(dashboardData?.userBalance || 0)).toFixed(2)}`
+        : `+$${Number(dashboardData?.userBalance || 0).toFixed(2)}`,
       icon: Scale,
       colorClass: 'peach',
-      highlightColor: dashboardData?.userBalance !== undefined && Number(dashboardData.userBalance) < 0 ? '#C53030' : '#15803D',
+      highlightColor: Number(dashboardData?.userBalance || 0) < 0 ? '#C53030' : '#15803D',
     },
   ];
 
-  const upcomingChores = dashboardData?.upcomingChores && dashboardData.upcomingChores.length > 0
-    ? dashboardData.upcomingChores
-    : [
-        { id: 1, title: 'Take out trash', subtitle: 'Today, Assigned to you', priority: 'Medium' },
-        { id: 2, title: 'Clean kitchen', subtitle: 'Tomorrow', priority: 'Low' },
-        { id: 3, title: 'Laundry', subtitle: 'Mar 28, 2025', priority: 'High' },
-      ];
-
-  const recentActivity = dashboardData?.recentActivity && dashboardData.recentActivity.length > 0
-    ? dashboardData.recentActivity
-    : [
-        { id: 1, user: 'Sam', initial: 'S', color: 'avatar-purple', text: 'Sam completed Clean bathroom', time: '2 hours ago' },
-        { id: 2, user: 'You', initial: 'Y', color: 'avatar-pink', text: 'You added a new expense: Groceries', time: '4 hours ago' },
-        { id: 3, user: 'Priya', initial: 'P', color: 'avatar-green', text: 'Priya was assigned to Vacuum living room', time: '1 day ago' },
-        { id: 4, user: 'You', initial: 'Y', color: 'avatar-yellow', text: 'You completed Take out trash', time: '1 day ago' },
-      ];
+  const upcomingChores = dashboardData?.upcomingChores || [];
+  const recentActivity = dashboardData?.recentActivity || [];
 
   return (
     <>
@@ -123,8 +119,23 @@ export default function DashboardPage() {
       />
 
       <div className="page-container">
-        {loading ? (
+        {householdError && (
+          <div role="alert" className="card" style={{ padding: 14, marginBottom: 18, color: 'var(--color-danger-text)' }}>
+            {householdError}
+          </div>
+        )}
+        {householdLoading || loading ? (
           <LoadingSpinner text="Loading your household dashboard..." />
+        ) : !currentHousehold ? (
+          <div className="card empty-state">
+            <h4>No household selected</h4>
+            <p>Join or create a household to see its dashboard.</p>
+          </div>
+        ) : dashboardError ? (
+          <div role="alert" className="card empty-state">
+            <h4>Could not load dashboard data</h4>
+            <p>{dashboardError}</p>
+          </div>
         ) : (
           <>
             {/* 7 STATS CARDS GRID */}
@@ -179,7 +190,9 @@ export default function DashboardPage() {
                 </div>
 
                 <div style={{ padding: '12px 24px' }}>
-                  {upcomingChores.map((chore) => (
+                  {upcomingChores.length === 0 ? (
+                    <p style={{ color: 'var(--color-muted)' }}>No upcoming chores.</p>
+                  ) : upcomingChores.map((chore) => (
                     <div
                       key={chore.id}
                       style={{
@@ -238,7 +251,9 @@ export default function DashboardPage() {
                 </div>
 
                 <div style={{ padding: '12px 24px' }}>
-                  {recentActivity.map((act) => {
+                  {recentActivity.length === 0 ? (
+                    <p style={{ color: 'var(--color-muted)' }}>No recent household activity.</p>
+                  ) : recentActivity.map((act) => {
                     const initial = act.initial || (act.user ? act.user.charAt(0).toUpperCase() : 'U');
                     const colorClass = act.color || 'avatar-purple';
                     return (

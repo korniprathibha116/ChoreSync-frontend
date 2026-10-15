@@ -17,7 +17,7 @@ import { useHousehold } from '../../hooks/useHousehold';
 
 export default function Sidebar({ isOpen, onClose }) {
   const { currentUser, logout } = useAuth();
-  const { currentHousehold, households, setCurrentHousehold } = useHousehold();
+  const { currentHousehold, householdSummary } = useHousehold();
   const navigate = useNavigate();
 
   const navItems = [
@@ -55,8 +55,8 @@ export default function Sidebar({ isOpen, onClose }) {
                 <Home size={18} />
               </div>
               <div className="household-name-wrap">
-                <strong>{currentHousehold?.name || 'Nextgen room'}</strong>
-                <span>Shared household</span>
+                <strong>{currentHousehold?.name || 'No household selected'}</strong>
+                <span>{currentHousehold ? 'Shared household' : 'Join a household to get started'}</span>
               </div>
             </div>
             <ChevronDown size={16} className="text-muted" />
@@ -88,8 +88,10 @@ export default function Sidebar({ isOpen, onClose }) {
               {userInitial}
             </div>
             <div className="sidebar-profile-text">
-              <strong>{currentUser?.displayName || 'Alex'}</strong>
-              <span>Household owner</span>
+              <strong>{currentUser?.displayName || 'Account'}</strong>
+              <span>
+                {householdSummary?.members?.find((member) => member.userId === currentUser?.id)?.role || 'Household member'}
+              </span>
             </div>
           </div>
           <button className="btn-logout" onClick={handleLogout} title="Log Out">

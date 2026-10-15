@@ -7,24 +7,30 @@ import {
   Trash2,
   CheckCircle,
   Circle,
-  Calendar,
-  User,
   AlertCircle
 } from 'lucide-react';
 import Topbar from '../components/layout/Topbar';
 import { useHousehold } from '../hooks/useHousehold';
 import { useAuth } from '../hooks/useAuth';
 import { choreService } from '../services/choreService';
+import { getApiErrorMessage } from '../services/api';
 import Modal from '../components/common/Modal';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 
 export default function ChoresPage() {
   const { toggleMobileMenu } = useOutletContext() || {};
-  const { currentHousehold, householdSummary } = useHousehold();
+  const {
+    currentHousehold,
+    householdSummary,
+    loading: householdLoading,
+    summaryLoading,
+    error: householdError,
+  } = useHousehold();
   const { currentUser } = useAuth();
 
   const [chores, setChores] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [choreError, setChoreError] = useState('');
   const [activeFilter, setActiveFilter] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -41,15 +47,18 @@ export default function ChoresPage() {
 
   const loadChores = async () => {
     if (!currentHousehold) {
+      setChores([]);
       setLoading(false);
       return;
     }
     try {
       setLoading(true);
+      setChoreError('');
       const data = await choreService.getChores(currentHousehold.id);
       setChores(data);
     } catch (err) {
-      console.error('Failed to load chores:', err);
+      setChores([]);
+      setChoreError(getApiErrorMessage(err, 'Unable to load household chores.'));
     } finally {
       setLoading(false);
     }
@@ -57,7 +66,7 @@ export default function ChoresPage() {
 
   useEffect(() => {
     loadChores();
-  }, [currentHousehold]);
+  }, [currentHousehold?.id]);
 
   const openCreateModal = () => {
     setEditingChore(null);
@@ -90,6 +99,10 @@ export default function ChoresPage() {
     e.preventDefault();
     setFormError('');
 
+    if (!currentHousehold?.id) {
+      setFormError('Select a household before saving a chore.');
+      return;
+    }
     if (!formTitle.trim()) {
       setFormError('Chore title is required.');
       return;
@@ -115,7 +128,7 @@ export default function ChoresPage() {
       setIsModalOpen(false);
       await loadChores();
     } catch (err) {
-      setFormError(err.message || 'Failed to save chore.');
+      setFormError(getApiErrorMessage(err, 'Failed to save chore.'));
     }
   };
 
@@ -125,7 +138,7 @@ export default function ChoresPage() {
         await choreService.deleteChore(id);
         await loadChores();
       } catch (err) {
-        alert('Failed to delete chore: ' + err.message);
+        alert(`Failed to delete chore: ${getApiErrorMessage(err, 'Please try again.')}`);
       }
     }
   };
@@ -139,7 +152,7 @@ export default function ChoresPage() {
       }
       await loadChores();
     } catch (err) {
-      alert('Failed to update status: ' + err.message);
+      alert(`Failed to update status: ${getApiErrorMessage(err, 'Please try again.')}`);
     }
   };
 
@@ -159,7 +172,7 @@ export default function ChoresPage() {
     return matchesFilter && matchesSearch;
   });
 
-  const membersList = householdSummary?.members || [];
+  const membersList = Array.isArray(householdSummary?.members) ? householdSummary.members : [];
 
   const formatDate = (dateStr) => {
     if (!dateStr) return 'No due date';
@@ -213,7 +226,11 @@ export default function ChoresPage() {
               />
             </div>
 
-            <button className="btn btn-primary btn-pill" onClick={openCreateModal}>
+            <button
+              className="btn btn-primary btn-pill"
+              onClick={openCreateModal}
+              disabled={householdLoading || !currentHousehold}
+            >
               <Plus size={16} />
               <span>Add Chore</span>
             </button>
@@ -221,8 +238,27 @@ export default function ChoresPage() {
         </div>
 
         {/* Chores Table / Card View */}
-        {loading ? (
+        {householdError && (
+          <div role="alert" className="card" style={{ padding: 14, marginBottom: 18, color: 'var(--color-danger-text)' }}>
+            {householdError}
+          </div>
+        )}
+
+        {householdLoading ? (
+          <LoadingSpinner text="Loading your household..." />
+        ) : !currentHousehold ? (
+          <div className="card empty-state">
+            <h4>No household selected</h4>
+            <p>Join or create a household before viewing its chores.</p>
+          </div>
+        ) : loading ? (
           <LoadingSpinner text="Loading chores..." />
+        ) : choreError ? (
+          <div role="alert" className="card empty-state">
+            <h4>Could not load chores</h4>
+            <p>{choreError}</p>
+            <button className="btn btn-outline btn-pill" onClick={loadChores}>Try again</button>
+          </div>
         ) : filteredChores.length === 0 ? (
           <div className="card empty-state">
             <div className="empty-icon">
@@ -413,8 +449,11 @@ export default function ChoresPage() {
                 className="form-input"
                 value={formAssignedToId}
                 onChange={(e) => setFormAssignedToId(e.target.value)}
+                disabled={summaryLoading || !householdSummary}
               >
                 <option value="">Unassigned</option>
+                {summaryLoading && <option disabled>Loading household members...</option>}
+                {!summaryLoading && membersList.length === 0 && <option disabled>No household members available</option>}
                 {membersList.map((m) => (
                   <option key={m.userId} value={m.userId}>
                     {m.displayName} {m.userId === currentUser?.id ? '(You)' : ''}

@@ -29,8 +29,11 @@ export function AuthProvider({ children }) {
       const user = await authService.getMe();
       setCurrentUser(user);
       return user;
-    } catch {
+    } catch (requestError) {
       setCurrentUser(null);
+      if (requestError.response?.status !== 401) {
+        setError(getAuthErrorMessage(requestError, 'Unable to verify your ChoreSync session.'));
+      }
       return null;
     } finally {
       setLoading(false);

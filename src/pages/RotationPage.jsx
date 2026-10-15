@@ -1,98 +1,88 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import {
   RotateCcw,
   Sparkles,
   ArrowRight,
-  ShieldCheck,
   CheckCircle,
-  Clock,
-  Info,
   Calendar
 } from 'lucide-react';
 import Topbar from '../components/layout/Topbar';
 import { useHousehold } from '../hooks/useHousehold';
 import { rotationService } from '../services/rotationService';
+import { getApiErrorMessage } from '../services/api';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 
 export default function RotationPage() {
   const { toggleMobileMenu } = useOutletContext() || {};
-  const { currentHousehold } = useHousehold();
+  const { currentHousehold, loading: householdLoading, error: householdError } = useHousehold();
 
   const [rotationData, setRotationData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [rotating, setRotating] = useState(false);
+  const [rotationError, setRotationError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
-
-  const loadRotation = async () => {
-    if (!currentHousehold) {
-      setLoading(false);
-      return;
-    }
-    try {
-      setLoading(true);
-      const data = await rotationService.getRotation(currentHousehold.id);
-      setRotationData(data);
-    } catch (err) {
-      console.error('Failed to load rotation data:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const rotationInProgress = useRef(false);
 
   useEffect(() => {
-    loadRotation();
-  }, [currentHousehold]);
-
-  
-const handleExecuteRotation = async () => {
-  if (!currentHousehold?.id) {
-    alert('Please wait for your household to load, or create/join a household first.');
-    return;
-  }
-
-  try {
-    setRotating(true);
+    let active = true;
+    if (householdLoading) {
+      setLoading(true);
+      return () => { active = false; };
+    }
     setSuccessMessage('');
+    if (!currentHousehold?.id) {
+      setRotationData(null);
+      setLoading(false);
+      setRotationError('');
+      return () => { active = false; };
+    }
+    setLoading(true);
+    setRotationData(null);
+    setRotationError('');
+    rotationService.getRotation(currentHousehold.id)
+      .then((data) => {
+        if (active) setRotationData(data);
+      })
+      .catch((err) => {
+        if (active) {
+          setRotationError(getApiErrorMessage(err, 'Unable to load chore rotation.'));
+        }
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => { active = false; };
+  }, [currentHousehold?.id, householdLoading]);
 
-    const result = await rotationService.rotateChores(currentHousehold.id);
-    setRotationData(result);
-    setSuccessMessage(
-      result.message || 'Chores successfully rotated to next members!'
-    );
-    setTimeout(() => setSuccessMessage(''), 4000);
-  } catch (err) {
-    alert('Rotation error: ' + (err.response?.data?.message || err.message));
-  } finally {
-    setRotating(false);
-  }
-};
+  const handleExecuteRotation = async () => {
+    const householdId = currentHousehold?.id;
+    if (!householdId) {
+      setRotationError('Select a household before rotating chores.');
+      return;
+    }
+    if (rotationInProgress.current) return;
 
-
-  const choreRotations = rotationData?.choreRotations && rotationData.choreRotations.length > 0
-    ? rotationData.choreRotations
-    : [
-        { id: 1, title: 'Take out trash', currentAssignee: 'Alex (You)', nextAssignee: 'Priya', difficulty: 'Medium', completed: false },
-        { id: 2, title: 'Clean kitchen', currentAssignee: 'Priya', nextAssignee: 'Sam', difficulty: 'Low', completed: false },
-        { id: 3, title: 'Laundry', currentAssignee: 'Sam', nextAssignee: 'Jordan', difficulty: 'High', completed: false },
-        { id: 4, title: 'Vacuum living room', currentAssignee: 'Jordan', nextAssignee: 'Alex (You)', difficulty: 'Medium', completed: false },
-        { id: 5, title: 'Clean bathroom', currentAssignee: 'Alex (You)', nextAssignee: 'Priya', difficulty: 'Low', completed: true },
-      ];
-
-  const memberWorkloads = rotationData?.memberWorkloads && rotationData.memberWorkloads.length > 0
-    ? rotationData.memberWorkloads
-    : [
-        { userId: 1, name: 'Alex (You)', assignedChores: 2, completedChores: 3, workloadScore: 3.5 },
-        { userId: 2, name: 'Priya', assignedChores: 1, completedChores: 4, workloadScore: 3.0 },
-        { userId: 3, name: 'Sam', assignedChores: 1, completedChores: 2, workloadScore: 2.0 },
-        { userId: 4, name: 'Jordan', assignedChores: 1, completedChores: 2, workloadScore: 2.0 },
-      ];
-
-  const formatDate = (dateStr) => {
-    if (!dateStr) return 'This Week';
-    const d = new Date(dateStr);
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    rotationInProgress.current = true;
+    setRotating(true);
+    setRotationError('');
+    setSuccessMessage('');
+    try {
+      const result = await rotationService.rotateChores(householdId);
+      if (currentHousehold?.id === householdId) {
+        setRotationData(result);
+        setSuccessMessage(result.message || 'Chores were rotated successfully.');
+      }
+    } catch (err) {
+      setRotationError(getApiErrorMessage(err, 'Unable to rotate chores.'));
+    } finally {
+      rotationInProgress.current = false;
+      setRotating(false);
+    }
   };
+
+  const choreRotations = rotationData?.choreRotations || [];
+  const memberWorkloads = rotationData?.memberWorkloads || [];
 
   return (
     <>
@@ -136,7 +126,7 @@ const handleExecuteRotation = async () => {
           <button
             className="btn btn-primary btn-pill"
             onClick={handleExecuteRotation}
-            disabled={rotating}
+            disabled={rotating || loading || householdLoading || !currentHousehold?.id}
           >
             <RotateCcw size={16} className={rotating ? 'animate-spin' : ''} />
             <span>{rotating ? 'Balancing Workloads...' : 'Rotate Chores Fairly'}</span>
@@ -163,8 +153,24 @@ const handleExecuteRotation = async () => {
           </div>
         )}
 
-        {loading ? (
+        {(householdError || rotationError) && (
+          <div role="alert" className="card" style={{ padding: 14, marginBottom: 18, color: 'var(--color-danger-text)' }}>
+            {householdError || rotationError}
+          </div>
+        )}
+
+        {householdLoading || loading ? (
           <LoadingSpinner text="Calculating rotation state..." />
+        ) : !currentHousehold ? (
+          <div className="card empty-state">
+            <h4>No household selected</h4>
+            <p>Select or join a household before viewing chore rotation.</p>
+          </div>
+        ) : rotationError ? (
+          <div className="card empty-state">
+            <h4>Rotation data is unavailable</h4>
+            <p>{rotationError}</p>
+          </div>
         ) : (
           <>
             {/* WORKLOAD DISTRIBUTION CARDS */}
@@ -179,7 +185,11 @@ const handleExecuteRotation = async () => {
                 marginBottom: 28,
               }}
             >
-              {memberWorkloads.map((m) => (
+              {memberWorkloads.length === 0 ? (
+                <div className="card empty-state">
+                  <p>No household members were returned.</p>
+                </div>
+              ) : memberWorkloads.map((m) => (
                 <div key={m.userId} className="card" style={{ padding: '20px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                     <strong style={{ fontSize: 15, color: 'var(--color-text)' }}>{m.name}</strong>
@@ -206,7 +216,9 @@ const handleExecuteRotation = async () => {
                 </p>
               </div>
 
-              <div className="table-responsive">
+              {choreRotations.length === 0 ? (
+                <p style={{ color: 'var(--color-muted)' }}>There are no chores to rotate in this household.</p>
+              ) : <div className="table-responsive">
                 <table className="table-custom">
                   <thead>
                     <tr>
@@ -260,7 +272,7 @@ const handleExecuteRotation = async () => {
                     ))}
                   </tbody>
                 </table>
-              </div>
+              </div>}
             </div>
 
             {/* ROTATION ALGORITHM EXPLANATION CARD */}
@@ -293,7 +305,7 @@ const handleExecuteRotation = async () => {
                     Deterministic Fair Rotation Logic
                   </h4>
                   <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', lineHeight: 1.6 }}>
-                    ChoreSync uses a deterministic workload-balanced round-robin algorithm. Instead of random assignments, the engine factors in historical completions and task weights to ensure chores circulate evenly among all household members without repeated clustering.
+                    Each chore moves to an eligible member with the lightest current assignment load. Stable household order breaks ties, and the current assignee is skipped when another member is available.
                   </p>
                 </div>
               </div>

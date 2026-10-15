@@ -9,62 +9,59 @@ import {
   ResponsiveContainer,
   PieChart,
   Pie,
-  Cell,
-  Legend
+  Cell
 } from 'recharts';
-import { Calendar, TrendingUp, CheckCircle, PieChart as PieIcon } from 'lucide-react';
+import { Calendar } from 'lucide-react';
 import Topbar from '../components/layout/Topbar';
 import { useHousehold } from '../hooks/useHousehold';
 import { reportService } from '../services/reportService';
+import { getApiErrorMessage } from '../services/api';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 
 export default function ReportsPage() {
   const { toggleMobileMenu } = useOutletContext() || {};
-  const { currentHousehold } = useHousehold();
+  const { currentHousehold, loading: householdLoading, error: householdError } = useHousehold();
 
   const [timeRange, setTimeRange] = useState('Last 30 Days');
   const [reportData, setReportData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [reportError, setReportError] = useState('');
 
   useEffect(() => {
+    let active = true;
     async function loadReports() {
-      if (!currentHousehold) {
+      if (householdLoading) {
+        setLoading(true);
+        return;
+      }
+      if (!currentHousehold?.id) {
+        setReportData(null);
         setLoading(false);
         return;
       }
       try {
         setLoading(true);
+        setReportError('');
         const data = await reportService.getReports(currentHousehold.id, timeRange);
-        setReportData(data);
+        if (active) setReportData(data);
       } catch (err) {
-        console.error('Failed to load reports:', err);
+        if (active) {
+          setReportData(null);
+          setReportError(getApiErrorMessage(err, 'Unable to load household reports.'));
+        }
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     }
     loadReports();
-  }, [currentHousehold, timeRange]);
+    return () => { active = false; };
+  }, [currentHousehold?.id, householdLoading, timeRange]);
 
-  // Chart data fallbacks matching the exact reference image
-  const choresByMember = reportData?.choresByMember && reportData.choresByMember.length > 0
-    ? reportData.choresByMember
-    : [
-        { name: 'Alex', completed: 6, pending: 2, fill: '#B59BFA' },
-        { name: 'Priya', completed: 4, pending: 1, fill: '#E0F4E9' },
-        { name: 'Sam', completed: 5, pending: 2, fill: '#FDE9E3' },
-        { name: 'Jordan', completed: 3, pending: 1, fill: '#FFF4D7' },
-      ];
+  const choresByMember = reportData?.choresByMember || [];
 
   const barColors = ['#9B7AE8', '#4ECDC4', '#FFD166', '#FF9F9B', '#A8DADC'];
 
-  const expenseBreakdown = reportData?.expenseBreakdown && reportData.expenseBreakdown.length > 0
-    ? reportData.expenseBreakdown
-    : [
-        { name: 'Groceries', value: 120, percentage: 48.9, color: '#9B7AE8' },
-        { name: 'Utilities', value: 80.5, percentage: 32.8, color: '#4ECDC4' },
-        { name: 'Household', value: 30, percentage: 12.2, color: '#FFD166' },
-        { name: 'Other', value: 15, percentage: 6.1, color: '#FF9F9B' },
-      ];
+  const expenseBreakdown = reportData?.expenseBreakdown || [];
 
   return (
     <>
@@ -100,8 +97,23 @@ export default function ReportsPage() {
           </div>
         </div>
 
-        {loading ? (
+        {householdError && (
+          <div role="alert" className="card" style={{ padding: 14, marginBottom: 18, color: 'var(--color-danger-text)' }}>
+            {householdError}
+          </div>
+        )}
+        {householdLoading || loading ? (
           <LoadingSpinner text="Generating reports..." />
+        ) : !currentHousehold ? (
+          <div className="card empty-state">
+            <h4>No household selected</h4>
+            <p>Join or create a household to view its reports.</p>
+          </div>
+        ) : reportError ? (
+          <div role="alert" className="card empty-state">
+            <h4>Could not load reports</h4>
+            <p>{reportError}</p>
+          </div>
         ) : (
           <>
             {/* TWO CHARTS ROW (MATCHING REFERENCE IMAGE) */}
@@ -121,7 +133,7 @@ export default function ReportsPage() {
                 </span>
 
                 <div style={{ width: '100%', height: 260 }}>
-                  <ResponsiveContainer width="100%" height="100%">
+                  {choresByMember.length === 0 ? <p style={{ color: 'var(--color-muted)' }}>No chore activity for this period.</p> : <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={choresByMember} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                       <XAxis dataKey="name" stroke="#8C8799" fontSize={12} tickLine={false} />
                       <YAxis stroke="#8C8799" fontSize={12} tickLine={false} allowDecimals={false} />
@@ -140,7 +152,7 @@ export default function ReportsPage() {
                         ))}
                       </Bar>
                     </BarChart>
-                  </ResponsiveContainer>
+                  </ResponsiveContainer>}
                 </div>
               </div>
 
@@ -160,7 +172,7 @@ export default function ReportsPage() {
                   }}
                 >
                   <div style={{ width: '100%', height: 240 }}>
-                    <ResponsiveContainer width="100%" height="100%">
+                    {expenseBreakdown.length === 0 ? <p style={{ color: 'var(--color-muted)' }}>No household expenses for this period.</p> : <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie
                           data={expenseBreakdown}
@@ -186,7 +198,7 @@ export default function ReportsPage() {
                           }}
                         />
                       </PieChart>
-                    </ResponsiveContainer>
+                    </ResponsiveContainer>}
                   </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>

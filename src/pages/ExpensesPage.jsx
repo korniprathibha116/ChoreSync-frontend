@@ -117,18 +117,12 @@ export default function ExpensesPage() {
     }
   };
 
-  const memberCount = householdSummary?.members?.length || 4;
+  const memberCount = householdSummary?.members?.length || 0;
   const previewShare = formAmount && !isNaN(parseFloat(formAmount))
-    ? (parseFloat(formAmount) / memberCount).toFixed(2)
+    ? (memberCount > 0 ? parseFloat(formAmount) / memberCount : 0).toFixed(2)
     : '0.00';
 
-  const expensesList = summaryData?.expenses && summaryData.expenses.length > 0
-    ? summaryData.expenses
-    : [
-        { id: 1, title: 'Groceries', amount: 120.00, paidByName: 'Alex', createdAt: '2025-03-25T10:00:00' },
-        { id: 2, title: 'Electricity', amount: 80.50, paidByName: 'Priya', createdAt: '2025-03-20T10:00:00' },
-        { id: 3, title: 'Water Bill', amount: 45.00, paidByName: 'Sam', createdAt: '2025-03-18T10:00:00' },
-      ];
+  const expensesList = summaryData?.expenses || [];
 
   const totalExpenses = summaryData?.totalExpenses !== undefined
     ? Number(summaryData.totalExpenses).toFixed(2)
@@ -274,7 +268,7 @@ export default function ExpensesPage() {
                     </td>
                     <td>
                       <span style={{ fontSize: 13, color: 'var(--color-text-secondary)', fontWeight: 500 }}>
-                        {exp.paidByName || (exp.paidById === currentUser?.id ? 'Alex (You)' : 'Alex')}
+                        {exp.paidByName || (exp.paidById === currentUser?.id ? 'You' : 'Household member')}
                       </span>
                     </td>
                     <td>
