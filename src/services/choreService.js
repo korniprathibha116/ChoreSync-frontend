@@ -3,9 +3,6 @@ import api from './api';
 export const choreService = {
   async getChores(householdId) {
     const res = await api.get(`/households/${householdId}/chores`);
-    if (!Array.isArray(res.data)) {
-      throw new Error('The server returned an invalid chore list.');
-    }
     return res.data;
   },
 

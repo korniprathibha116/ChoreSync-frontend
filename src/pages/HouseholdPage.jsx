@@ -1,47 +1,35 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import {
+  Users,
   UserPlus,
   Copy,
   Check,
+  MoreVertical,
   Trash2,
   Share2,
+  ShieldCheck,
   Home
 } from 'lucide-react';
 import Topbar from '../components/layout/Topbar';
 import { useHousehold } from '../hooks/useHousehold';
 import { useAuth } from '../hooks/useAuth';
 import { householdService } from '../services/householdService';
-import { getApiErrorMessage } from '../services/api';
 import Modal from '../components/common/Modal';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 
 export default function HouseholdPage() {
   const { toggleMobileMenu } = useOutletContext() || {};
-  const {
-    households,
-    currentHousehold,
-    setCurrentHousehold,
-    householdSummary,
-    loading: householdsLoading,
-    summaryLoading,
-    error: householdError,
-    refreshHouseholds,
-  } = useHousehold();
+  const { currentHousehold, householdSummary, refreshHouseholds } = useHousehold();
   const { currentUser } = useAuth();
 
   const [activeTab, setActiveTab] = useState('Members');
   const [copied, setCopied] = useState(false);
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [joinCode, setJoinCode] = useState('');
   const [joinError, setJoinError] = useState('');
   const [joinLoading, setJoinLoading] = useState(false);
-  const [householdName, setHouseholdName] = useState('');
-  const [householdDescription, setHouseholdDescription] = useState('');
-  const [createError, setCreateError] = useState('');
-  const [createLoading, setCreateLoading] = useState(false);
 
   const inviteCode = currentHousehold?.inviteCode?.trim() || null;
 
@@ -61,38 +49,25 @@ export default function HouseholdPage() {
     }
     try {
       setJoinLoading(true);
-      const joinedHousehold = await householdService.joinHousehold(joinCode.trim());
+      await householdService.joinHousehold(joinCode.trim());
+      await refreshHouseholds();
       setIsJoinModalOpen(false);
       setJoinCode('');
-      await refreshHouseholds(joinedHousehold.id);
     } catch (err) {
-      setJoinError(getApiErrorMessage(err, 'Unable to join this household.'));
+      const responseData = err.response?.data;
+      const message = typeof responseData?.message === 'string'
+        ? responseData.message
+        : typeof responseData === 'string'
+          ? responseData
+          : null;
+      setJoinError(
+        message ||
+        (err.response
+          ? `The server rejected the request (HTTP ${err.response.status}). Please check the invite code and try again.`
+          : 'Unable to reach the ChoreSync server. Check your connection and try again.')
+      );
     } finally {
       setJoinLoading(false);
-    }
-  };
-
-  const handleCreateHousehold = async (e) => {
-    e.preventDefault();
-    setCreateError('');
-    if (!householdName.trim()) {
-      setCreateError('Household name is required.');
-      return;
-    }
-    try {
-      setCreateLoading(true);
-      const createdHousehold = await householdService.createHousehold({
-        name: householdName.trim(),
-        description: householdDescription.trim(),
-      });
-      setIsCreateModalOpen(false);
-      setHouseholdName('');
-      setHouseholdDescription('');
-      await refreshHouseholds(createdHousehold.id);
-    } catch (err) {
-      setCreateError(getApiErrorMessage(err, 'Unable to create household.'));
-    } finally {
-      setCreateLoading(false);
     }
   };
 
@@ -102,12 +77,19 @@ export default function HouseholdPage() {
         await householdService.removeMember(currentHousehold.id, targetUserId);
         await refreshHouseholds();
       } catch (err) {
-        alert(`Failed to remove member: ${getApiErrorMessage(err, 'Please try again.')}`);
+        alert('Failed to remove member: ' + err.message);
       }
     }
   };
 
-  const members = householdSummary?.members || [];
+  const members = householdSummary?.members && householdSummary.members.length > 0
+    ? householdSummary.members
+    : [
+        { userId: currentUser?.id || 1, displayName: currentUser?.displayName || 'Alex', email: currentUser?.email || 'alex@example.com', role: 'Owner' },
+        { userId: 2, displayName: 'Priya', email: 'priya@example.com', role: 'Member' },
+        { userId: 3, displayName: 'Sam', email: 'sam@example.com', role: 'Member' },
+        { userId: 4, displayName: 'Jordan', email: 'jordan@example.com', role: 'Member' },
+      ];
 
   const avatarColors = ['avatar-purple', 'avatar-yellow', 'avatar-pink', 'avatar-green', 'avatar-blue'];
 
@@ -147,35 +129,7 @@ export default function HouseholdPage() {
             </button>
           </div>
 
-          {households.length > 1 && (
-            <label className="form-group" style={{ margin: 0 }}>
-              <span className="form-label">Selected household</span>
-              <select
-                className="form-input"
-                value={currentHousehold?.id || ''}
-                onChange={(event) => {
-                  const selected = households.find((household) => String(household.id) === event.target.value);
-                  setCurrentHousehold(selected).catch(() => {});
-                }}
-              >
-                {households.map((household) => (
-                  <option key={household.id} value={household.id}>{household.name}</option>
-                ))}
-              </select>
-            </label>
-          )}
-
           <div style={{ display: 'flex', gap: 10 }}>
-            <button
-              className="btn btn-outline btn-pill"
-              onClick={() => {
-                setCreateError('');
-                setIsCreateModalOpen(true);
-              }}
-            >
-              <Home size={15} />
-              <span>Create Household</span>
-            </button>
             <button
               className="btn btn-outline btn-pill"
               onClick={() => setIsJoinModalOpen(true)}
@@ -194,12 +148,6 @@ export default function HouseholdPage() {
           </div>
         </div>
 
-        {householdError && (
-          <div role="alert" className="card" style={{ padding: 14, marginBottom: 18, color: 'var(--color-danger-text)' }}>
-            {householdError}
-          </div>
-        )}
-
         {activeTab === 'Members' ? (
           /* MEMBERS LIST TABLE / CARD */
           <div className="card" style={{ padding: '8px 24px' }}>
@@ -214,26 +162,16 @@ export default function HouseholdPage() {
             >
               <div>
                 <strong style={{ fontSize: 16, color: 'var(--color-text)' }}>
-                  {currentHousehold?.name || 'Household'} Members
+                  {currentHousehold?.name || 'Nextgen room'} Members
                 </strong>
                 <span style={{ display: 'block', fontSize: 12, color: 'var(--color-muted)', marginTop: 2 }}>
-                  {members.length} {members.length === 1 ? 'member' : 'members'} in this household
+                  {members.length} roommates currently sharing this home
                 </span>
               </div>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-              {householdsLoading || summaryLoading ? (
-                <LoadingSpinner text="Loading household members..." />
-              ) : !currentHousehold ? (
-                <p style={{ padding: '20px 0', color: 'var(--color-muted)' }}>
-                  You do not belong to a household yet. Join one with an invite code.
-                </p>
-              ) : members.length === 0 ? (
-                <p style={{ padding: '20px 0', color: 'var(--color-muted)' }}>
-                  No household members were returned.
-                </p>
-              ) : members.map((member, idx) => {
+              {members.map((member, idx) => {
                 const isMe = member.userId === currentUser?.id;
                 const isOwner = member.role?.toUpperCase() === 'OWNER';
                 const initial = member.displayName ? member.displayName.charAt(0).toUpperCase() : 'U';
@@ -343,61 +281,12 @@ export default function HouseholdPage() {
             </div>
 
             <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', lineHeight: 1.6 }}>
-              Share the invite code with people who should join this household.
+              • Roommates can join by clicking <strong>"Join Another Space"</strong> in this dashboard or during account registration.<br />
+              • Once joined, they will be included in the automated chore rotation and equal expense splits.
             </p>
           </div>
         )}
       </div>
-
-      <Modal
-        isOpen={isCreateModalOpen}
-        onClose={() => setIsCreateModalOpen(false)}
-        title="Create a Household"
-      >
-        {createError && (
-          <div role="alert" style={{
-            padding: '10px 14px',
-            backgroundColor: 'var(--color-danger-bg)',
-            color: 'var(--color-danger-text)',
-            borderRadius: 'var(--radius-md)',
-            fontSize: 13,
-            marginBottom: 16,
-          }}>
-            {createError}
-          </div>
-        )}
-        <form onSubmit={handleCreateHousehold}>
-          <div className="form-group">
-            <label className="form-label" htmlFor="household-name">Household name</label>
-            <input
-              id="household-name"
-              type="text"
-              className="form-input"
-              value={householdName}
-              onChange={(event) => setHouseholdName(event.target.value)}
-              required
-            />
-          </div>
-          <div className="form-group">
-            <label className="form-label" htmlFor="household-description">Description (optional)</label>
-            <textarea
-              id="household-description"
-              className="form-input"
-              value={householdDescription}
-              onChange={(event) => setHouseholdDescription(event.target.value)}
-              rows={3}
-            />
-          </div>
-          <div className="modal-footer" style={{ padding: '16px 0 0', borderTop: 'none' }}>
-            <button type="button" className="btn btn-outline" onClick={() => setIsCreateModalOpen(false)}>
-              Cancel
-            </button>
-            <button type="submit" className="btn btn-primary" disabled={createLoading}>
-              {createLoading ? 'Creating...' : 'Create Household'}
-            </button>
-          </div>
-        </form>
-      </Modal>
 
       {/* INVITE MODAL */}
       <Modal

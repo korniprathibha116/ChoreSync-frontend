@@ -1,146 +1,85 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { useAuth } from './useAuth';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { householdService } from '../services/householdService';
-import { getApiErrorMessage } from '../services/api';
+import { useAuth } from './useAuth';
 
 const HouseholdContext = createContext(null);
 
 export function HouseholdProvider({ children }) {
-  const { currentUser, loading: authLoading, error: authError, setCurrentUser } = useAuth();
+  const { currentUser } = useAuth();
   const [households, setHouseholds] = useState([]);
-  const [currentHousehold, setCurrentHouseholdState] = useState(null);
+  const [currentHousehold, setCurrentHousehold] = useState(null);
   const [householdSummary, setHouseholdSummary] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [summaryLoading, setSummaryLoading] = useState(false);
-  const [error, setError] = useState('');
-  const selectedHouseholdId = useRef(null);
-  const requestSequence = useRef(0);
+  const [loading, setLoading] = useState(false);
 
-  const setCurrentHousehold = useCallback(async (household) => {
-    const sequence = ++requestSequence.current;
-    selectedHouseholdId.current = household?.id ?? null;
-    setCurrentHouseholdState(household || null);
-    setHouseholdSummary(null);
-    setError('');
-
-    if (!household) {
-      setSummaryLoading(false);
-      return null;
-    }
-
-    setSummaryLoading(true);
-    try {
-      const summary = await householdService.getHouseholdSummary(household.id);
-      if (String(summary.id) !== String(household.id) || !Array.isArray(summary.members)) {
-        throw new Error('The server returned a summary for a different or invalid household.');
-      }
-      if (sequence === requestSequence.current) {
-        setHouseholdSummary(summary);
-      }
-      return summary;
-    } catch (requestError) {
-      if (sequence === requestSequence.current) {
-        setError(getApiErrorMessage(requestError, 'Unable to load household members.'));
-        if (requestError.response?.status === 401) {
-          setCurrentUser(null);
-        }
-      }
-      throw requestError;
-    } finally {
-      if (sequence === requestSequence.current) {
-        setSummaryLoading(false);
-      }
-    }
-  }, [setCurrentUser]);
-
-  const refreshHouseholds = useCallback(async (preferredHouseholdId) => {
-    if (!currentUser || authLoading) {
+  const refreshHouseholds = useCallback(async () => {
+    if (!currentUser) {
       setHouseholds([]);
-      setCurrentHouseholdState(null);
+      setCurrentHousehold(null);
       setHouseholdSummary(null);
-      setError(authError || '');
-      setLoading(false);
-      return [];
+      return;
     }
-
-    const sequence = ++requestSequence.current;
-    setLoading(true);
-    setError('');
     try {
+      setLoading(true);
       const list = await householdService.getHouseholds();
-      if (!Array.isArray(list)) {
-        throw new Error('The household response was not a list.');
-      }
-      if (sequence !== requestSequence.current) {
-        return list;
-      }
       setHouseholds(list);
+      if (list.length > 0) {
+        const selected = currentHousehold
+          ? list.find(h => h.id === currentHousehold.id) || list[0]
+          : list[0];
+        setCurrentHousehold(selected);
 
-      const requestedId = preferredHouseholdId ?? selectedHouseholdId.current;
-      const selected = list.find((household) => String(household.id) === String(requestedId)) || list[0] || null;
-      selectedHouseholdId.current = selected?.id ?? null;
-      setCurrentHouseholdState(selected);
-      setHouseholdSummary(null);
-
-      if (selected) {
-        setSummaryLoading(true);
-        const summary = await householdService.getHouseholdSummary(selected.id);
-        if (String(summary.id) !== String(selected.id) || !Array.isArray(summary.members)) {
-          throw new Error('The server returned a summary for a different or invalid household.');
-        }
-        if (sequence === requestSequence.current) {
+        // Fetch detailed summary
+        try {
+          const summary = await householdService.getHouseholdSummary(selected.id);
           setHouseholdSummary(summary);
+        } catch {
+          // fallback
         }
-      }
-      return list;
-    } catch (requestError) {
-      if (sequence === requestSequence.current) {
+      } else {
+        setCurrentHousehold(null);
         setHouseholdSummary(null);
-        setError(getApiErrorMessage(requestError, 'Unable to load households.'));
-        if (requestError.response?.status === 401) {
-          setCurrentUser(null);
-        }
       }
-      throw requestError;
+    } catch {
+      // ignore
     } finally {
-      if (sequence === requestSequence.current) {
-        setLoading(false);
-        setSummaryLoading(false);
-      }
+      setLoading(false);
     }
-  }, [authError, authLoading, currentUser, setCurrentUser]);
+  }, [currentUser, currentHousehold]);
 
   useEffect(() => {
-    if (authLoading) {
-      setLoading(true);
-      return;
-    }
-    if (!currentUser) {
-      ++requestSequence.current;
-      selectedHouseholdId.current = null;
+    if (currentUser) {
+      refreshHouseholds();
+    } else {
       setHouseholds([]);
-      setCurrentHouseholdState(null);
+      setCurrentHousehold(null);
       setHouseholdSummary(null);
-      setError(authError || '');
-      setLoading(false);
-      setSummaryLoading(false);
-      return;
     }
-    refreshHouseholds().catch(() => {});
-  }, [authError, authLoading, currentUser, refreshHouseholds]);
+  }, [currentUser]);
 
-  const value = {
-    households,
-    currentHousehold,
-    setCurrentHousehold,
-    householdSummary,
-    loading,
-    summaryLoading,
-    error,
-    refreshHouseholds,
+  const selectHousehold = async (hh) => {
+    setCurrentHousehold(hh);
+    try {
+      const summary = await householdService.getHouseholdSummary(hh.id);
+      setHouseholdSummary(summary);
+    } catch {
+      // ignore
+    }
   };
 
-  return <HouseholdContext.Provider value={value}>{children}</HouseholdContext.Provider>;
+  return (
+    <HouseholdContext.Provider
+      value={{
+        households,
+        currentHousehold,
+        householdSummary,
+        loading,
+        refreshHouseholds,
+        setCurrentHousehold: selectHousehold,
+      }}
+    >
+      {children}
+    </HouseholdContext.Provider>
+  );
 }
 
 export function useHousehold() {

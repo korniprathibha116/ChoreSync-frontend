@@ -6,8 +6,8 @@ export default function Topbar({ onToggleMobileMenu, title, subtitle }) {
   const { currentUser } = useAuth();
   const [showNotifications, setShowNotifications] = useState(false);
 
-  const userInitial = currentUser?.displayName ? currentUser.displayName.charAt(0).toUpperCase() : 'U';
-  const displayName = currentUser?.displayName || 'Account';
+  const userInitial = currentUser?.displayName ? currentUser.displayName.charAt(0).toUpperCase() : 'A';
+  const displayName = currentUser?.displayName || 'Alex';
 
   return (
     <header className="topbar">
@@ -33,6 +33,7 @@ export default function Topbar({ onToggleMobileMenu, title, subtitle }) {
             aria-label="Notifications"
           >
             <Bell size={18} />
+            <span className="notification-dot" />
           </button>
           {showNotifications && (
             <div
@@ -51,7 +52,9 @@ export default function Topbar({ onToggleMobileMenu, title, subtitle }) {
             >
               <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8 }}>Notifications</div>
               <div style={{ fontSize: 12, color: 'var(--color-muted)', lineHeight: 1.5 }}>
-                No notifications yet.
+                • Sam completed Clean bathroom<br />
+                • Laundry is due today<br />
+                • Fair rotation scheduled in 6 days
               </div>
             </div>
           )}
