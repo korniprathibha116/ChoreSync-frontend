@@ -44,20 +44,30 @@ export default function RotationPage() {
     loadRotation();
   }, [currentHousehold]);
 
-  const handleExecuteRotation = async () => {
-    try {
-      setRotating(true);
-      setSuccessMessage('');
-      const result = await rotationService.rotateChores(currentHousehold.id);
-      setRotationData(result);
-      setSuccessMessage(result.message || 'Chores successfully rotated to next members!');
-      setTimeout(() => setSuccessMessage(''), 4000);
-    } catch (err) {
-      alert('Rotation error: ' + (err.response?.data?.message || err.message));
-    } finally {
-      setRotating(false);
-    }
-  };
+  
+const handleExecuteRotation = async () => {
+  if (!currentHousehold?.id) {
+    alert('Please wait for your household to load, or create/join a household first.');
+    return;
+  }
+
+  try {
+    setRotating(true);
+    setSuccessMessage('');
+
+    const result = await rotationService.rotateChores(currentHousehold.id);
+    setRotationData(result);
+    setSuccessMessage(
+      result.message || 'Chores successfully rotated to next members!'
+    );
+    setTimeout(() => setSuccessMessage(''), 4000);
+  } catch (err) {
+    alert('Rotation error: ' + (err.response?.data?.message || err.message));
+  } finally {
+    setRotating(false);
+  }
+};
+
 
   const choreRotations = rotationData?.choreRotations && rotationData.choreRotations.length > 0
     ? rotationData.choreRotations
