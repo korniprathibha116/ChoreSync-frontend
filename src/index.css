@@ -1,0 +1,129 @@
+:root {
+  /* Pastel Design System Variables */
+  --color-primary: #9B7AE8;
+  --color-primary-hover: #8862E4;
+  --color-primary-light: #F0E9FF;
+  --color-primary-dark: #6E49D3;
+
+  --color-lavender: #F0E9FF;
+  --color-lavender-text: #6B49C8;
+
+  --color-pink: #FCE8EF;
+  --color-pink-text: #C43D69;
+
+  --color-mint: #E0F4E9;
+  --color-mint-text: #218353;
+
+  --color-peach: #FDE9E3;
+  --color-peach-text: #BF5333;
+
+  --color-cream: #FFF4D7;
+  --color-cream-text: #9E7412;
+
+  --color-blue: #EBF2FE;
+  --color-blue-text: #2563EB;
+
+  --color-background: #FAF9FC;
+  --color-surface: #FFFFFF;
+  --color-text: #171717;
+  --color-text-secondary: #4E4A5C;
+  --color-muted: #777384;
+  --color-border: #EAE7F0;
+  --color-border-subtle: #F3F1F8;
+
+  --color-success-bg: #E0F4E9;
+  --color-success-text: #1B784B;
+  --color-warning-bg: #FFF4D7;
+  --color-warning-text: #A16207;
+  --color-danger-bg: #FEE2E2;
+  --color-danger-text: #B91C1C;
+
+  --font-sans: 'DM Sans', system-ui, -apple-system, sans-serif;
+  --font-heading: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+
+  --shadow-sm: 0 1px 3px rgba(23, 23, 37, 0.04), 0 1px 2px rgba(23, 23, 37, 0.02);
+  --shadow-md: 0 4px 12px rgba(23, 23, 37, 0.05), 0 1px 3px rgba(23, 23, 37, 0.03);
+  --shadow-lg: 0 10px 25px rgba(23, 23, 37, 0.07), 0 4px 10px rgba(23, 23, 37, 0.03);
+  --shadow-purple: 0 6px 18px rgba(155, 122, 232, 0.28);
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-full: 9999px;
+
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.25s ease;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  min-height: 100%;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--color-text);
+  background-color: var(--color-background);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading);
+  color: var(--color-text);
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+a {
+  color: var(--color-primary);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+a:hover {
+  color: var(--color-primary-hover);
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+}
+
+input, select, textarea {
+  font-family: inherit;
+  font-size: 14px;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #DDD8E8;
+  border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #C4BFD6;
+}
